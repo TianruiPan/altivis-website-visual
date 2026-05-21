@@ -26,6 +26,10 @@ http://127.0.0.1:5173/
 - Perspective camera looking across a flat field
 - No height/terrain deformation in this first version
 - Subtle breathing through point size only
+- Three abstract optical devices represented by larger white dots
+- Each optical device has a slow rotating FOV sector
+- Dots inside a sector enlarge according to distance from the device
+- Device ranges are drawn as a pale boolean-union outline, so overlapping circles merge visually
 
 ## Extension Hooks
 
@@ -34,6 +38,7 @@ The returned API from `createPointFieldHero()` already exposes:
 - `setStyleState()`: reserved for color and point-size states
 - `setDensityState()`: reserved for health/density changes
 - `setDeformationState()`: reserved for local dents, pulses, and sensing-skin motion
+- `setOpticDevices()`: reserved for future runtime device/data updates
 - `dispose()`: cleanup for future embedding in a website route or component
 
 The scene should stay deterministic so the same module can later drive both:
