@@ -3,6 +3,8 @@ import * as THREE from 'three';
 const DEFAULT_OPTIONS = {
   background: '#111111',
   pointColor: '#ffffff',
+  uncoveredPointColor: '#9a9a9a',
+  pointSize: 20,
   field: {
     columns: 96,
     rows: 64,
@@ -18,11 +20,9 @@ const DEFAULT_OPTIONS = {
   optics: {
     enabled: true,
     deviceColor: '#ffffff',
-    sectorColor: '#ffffff',
     rangeColor: '#ffffff',
     rangeOpacity: 0.22,
-    sectorOpacity: 0.045,
-    deviceRadius: 0.12,
+    deviceRadius: 0.09,
     devices: []
   },
   camera: {
@@ -47,52 +47,56 @@ const vertexShader = `
   uniform float uBreathSpeed;
   uniform int uOpticCount;
   uniform vec3 uOpticRanges[MAX_OPTIC_DEVICES];
-  uniform vec4 uOpticScans[MAX_OPTIC_DEVICES];
 
   varying float vAlpha;
-
-  float signedAngleDistance(float a, float b) {
-    return atan(sin(a - b), cos(a - b));
-  }
+  varying float vCoverage;
 
   void main() {
-    float scanInfluence = 0.0;
+    float coverage = 0.0;
 
     for (int i = 0; i < MAX_OPTIC_DEVICES; i++) {
       if (i < uOpticCount) {
         vec3 opticRange = uOpticRanges[i];
-        vec4 opticScan = uOpticScans[i];
         vec2 toPoint = position.xz - opticRange.xy;
         float distanceToOptic = length(toPoint);
-        float pointAngle = atan(toPoint.y, toPoint.x);
-        float angleDelta = abs(signedAngleDistance(pointAngle, opticScan.x));
-        float fovHalf = opticScan.y * 0.5;
-        float rangeMask = 1.0 - smoothstep(opticRange.z * 0.62, opticRange.z, distanceToOptic);
-        float fovMask = 1.0 - smoothstep(fovHalf * 0.88, fovHalf, angleDelta);
-        scanInfluence = max(scanInfluence, rangeMask * fovMask);
+        float rangeMask = 1.0 - smoothstep(opticRange.z * 0.98, opticRange.z, distanceToOptic);
+        coverage = max(coverage, rangeMask);
       }
     }
 
-    vAlpha = clamp(aAlpha + scanInfluence * 0.72, 0.0, 1.0);
+    vCoverage = coverage;
+    vAlpha = aAlpha;
 
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     float breath = 1.0 + sin((uTime * uBreathSpeed) + (aSeed * 6.2831853)) * uBreathStrength;
-    float scanScale = 1.0 + scanInfluence * 3.2;
-    gl_PointSize = uPointSize * uPixelRatio * breath * scanScale * (1.0 / max(0.28, -mvPosition.z));
+    float coverageScale = mix(0.76, 1.0, coverage);
+    gl_PointSize = uPointSize * uPixelRatio * breath * coverageScale * (1.0 / max(0.28, -mvPosition.z));
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
 
 const fragmentShader = `
   uniform vec3 uPointColor;
+  uniform vec3 uUncoveredPointColor;
 
   varying float vAlpha;
+  varying float vCoverage;
 
   void main() {
     vec2 centered = gl_PointCoord - vec2(0.5);
     float dist = length(centered);
     float disc = smoothstep(0.5, 0.16, dist);
-    gl_FragColor = vec4(uPointColor, disc * vAlpha);
+
+    float diagonalA = abs(centered.x - centered.y);
+    float diagonalB = abs(centered.x + centered.y);
+    float stroke = 1.0 - smoothstep(0.035, 0.12, min(diagonalA, diagonalB));
+    float extent = 1.0 - smoothstep(0.34, 0.5, max(abs(centered.x), abs(centered.y)));
+    float xShape = stroke * extent;
+
+    float covered = smoothstep(0.45, 0.55, vCoverage);
+    vec3 color = mix(uUncoveredPointColor, uPointColor, covered);
+    float shapeAlpha = mix(xShape * 0.95, disc, covered);
+    gl_FragColor = vec4(color, shapeAlpha * vAlpha);
   }
 `;
 
@@ -170,68 +174,37 @@ function normalizeDevice(device) {
 }
 
 function createCircleDevice(device, opticsOptions) {
-  const geometry = new THREE.CircleGeometry(opticsOptions.deviceRadius, 32);
-  const material = new THREE.MeshBasicMaterial({
+  const texture = createDeviceCircleTexture(opticsOptions.deviceColor);
+  const material = new THREE.SpriteMaterial({
+    map: texture,
     color: opticsOptions.deviceColor,
     transparent: true,
     opacity: 0.95,
     depthWrite: false
   });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.rotation.x = -Math.PI * 0.5;
-  mesh.position.set(device.x, 0.035, device.z);
-  return mesh;
+  const sprite = new THREE.Sprite(material);
+  const diameter = opticsOptions.deviceRadius * 2;
+  sprite.scale.set(diameter, diameter, 1);
+  sprite.position.set(device.x, 0.055, device.z);
+  return sprite;
 }
 
-function createSectorMesh(device, opticsOptions) {
-  const geometry = createSectorGeometry(device, device.angle);
-  const material = new THREE.MeshBasicMaterial({
-    color: opticsOptions.sectorColor,
-    transparent: true,
-    opacity: opticsOptions.sectorOpacity,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending
-  });
-  return new THREE.Mesh(geometry, material);
-}
+function createDeviceCircleTexture(color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 96;
+  canvas.height = 96;
 
-function createSectorGeometry(device, angle, segments = 28) {
-  const positions = new Float32Array((segments + 2) * 3);
-  writeSectorPositions(positions, device, angle, segments);
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = color;
+  context.lineWidth = 10;
+  context.beginPath();
+  context.arc(48, 48, 34, 0, Math.PI * 2);
+  context.stroke();
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-  const indices = [];
-  for (let i = 1; i <= segments; i += 1) {
-    indices.push(0, i, i + 1);
-  }
-  geometry.setIndex(indices);
-  geometry.userData.segments = segments;
-  return geometry;
-}
-
-function writeSectorPositions(positions, device, angle, segments) {
-  positions[0] = device.x;
-  positions[1] = 0.012;
-  positions[2] = device.z;
-
-  let offset = 3;
-  const start = angle - device.fov * 0.5;
-  for (let i = 0; i <= segments; i += 1) {
-    const theta = start + (device.fov * i) / segments;
-    positions[offset] = device.x + Math.cos(theta) * device.range;
-    positions[offset + 1] = 0.012;
-    positions[offset + 2] = device.z + Math.sin(theta) * device.range;
-    offset += 3;
-  }
-}
-
-function updateSectorGeometry(mesh, device, angle) {
-  const positionAttribute = mesh.geometry.getAttribute('position');
-  writeSectorPositions(positionAttribute.array, device, angle, mesh.geometry.userData.segments);
-  positionAttribute.needsUpdate = true;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function createUnionRangeOutline(devices, opticsOptions) {
@@ -312,16 +285,14 @@ export function createPointFieldHero(container, userOptions = {}) {
     uniforms: {
       uTime: { value: 0 },
       uPixelRatio: { value: renderer.getPixelRatio() },
-      uPointSize: { value: 24 },
+      uPointSize: { value: options.pointSize },
       uPointColor: { value: new THREE.Color(options.pointColor) },
+      uUncoveredPointColor: { value: new THREE.Color(options.uncoveredPointColor) },
       uBreathStrength: { value: options.animation.breathStrength },
       uBreathSpeed: { value: options.animation.breathSpeed },
       uOpticCount: { value: 0 },
       uOpticRanges: {
         value: Array.from({ length: MAX_OPTIC_DEVICES }, () => new THREE.Vector3())
-      },
-      uOpticScans: {
-        value: Array.from({ length: MAX_OPTIC_DEVICES }, () => new THREE.Vector4())
       }
     },
     vertexShader,
@@ -337,17 +308,14 @@ export function createPointFieldHero(container, userOptions = {}) {
     ? options.optics.devices.slice(0, MAX_OPTIC_DEVICES).map(normalizeDevice)
     : [];
   const opticGroup = new THREE.Group();
-  const sectorMeshes = [];
   const deviceMeshes = [];
   let rangeOutline = null;
 
   if (opticDevices.length > 0) {
     opticDevices.forEach((device) => {
-      const sectorMesh = createSectorMesh(device, options.optics);
       const deviceMesh = createCircleDevice(device, options.optics);
-      sectorMeshes.push(sectorMesh);
       deviceMeshes.push(deviceMesh);
-      opticGroup.add(sectorMesh, deviceMesh);
+      opticGroup.add(deviceMesh);
     });
 
     rangeOutline = createUnionRangeOutline(opticDevices, options.optics);
@@ -418,6 +386,9 @@ export function createPointFieldHero(container, userOptions = {}) {
 
   function setStyleState(nextStyle = {}) {
     if (nextStyle.pointColor) setPointColor(nextStyle.pointColor);
+    if (nextStyle.uncoveredPointColor) {
+      material.uniforms.uUncoveredPointColor.value.set(nextStyle.uncoveredPointColor);
+    }
     if (typeof nextStyle.pointSize === 'number') {
       material.uniforms.uPointSize.value = nextStyle.pointSize;
     }
@@ -435,25 +406,20 @@ export function createPointFieldHero(container, userOptions = {}) {
     // Reserved for runtime device updates when this prototype becomes data-driven.
   }
 
-  function updateOptics(elapsed) {
+  function updateOptics() {
     const opticCount = opticDevices.length;
     material.uniforms.uOpticCount.value = opticCount;
 
     for (let i = 0; i < MAX_OPTIC_DEVICES; i += 1) {
       const rangeUniform = material.uniforms.uOpticRanges.value[i];
-      const scanUniform = material.uniforms.uOpticScans.value[i];
       const device = opticDevices[i];
 
       if (!device) {
         rangeUniform.set(0, 0, 0);
-        scanUniform.set(0, 0, 0, 0);
         continue;
       }
 
-      const angle = device.angle + elapsed * device.rotationSpeed;
       rangeUniform.set(device.x, device.z, device.range);
-      scanUniform.set(angle, device.fov, 1, 0);
-      updateSectorGeometry(sectorMeshes[i], device, angle);
     }
   }
 
@@ -462,12 +428,9 @@ export function createPointFieldHero(container, userOptions = {}) {
     resizeObserver.disconnect();
     geometry.dispose();
     material.dispose();
-    sectorMeshes.forEach((mesh) => {
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-    });
     deviceMeshes.forEach((mesh) => {
-      mesh.geometry.dispose();
+      mesh.geometry?.dispose();
+      mesh.material.map?.dispose();
       mesh.material.dispose();
     });
     if (rangeOutline) {

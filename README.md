@@ -23,12 +23,14 @@ http://127.0.0.1:5173/
 
 - Dark background: `#111111`
 - White dot matrix
+- Denser grid than the initial stage
 - Perspective camera looking across a flat field
 - No height/terrain deformation in this first version
 - Subtle breathing through point size only
-- Three abstract optical devices represented by larger white dots
-- Each optical device has a slow rotating FOV sector
-- Dots inside a sector enlarge according to distance from the device
+- Three abstract optical devices represented by smaller white outline circles
+- No visible FOV sector in the current stage
+- Dots outside the combined coverage area render as small grey X marks
+- Dots inside the combined coverage area remain white dots
 - Device ranges are drawn as a pale boolean-union outline, so overlapping circles merge visually
 
 ## Extension Hooks

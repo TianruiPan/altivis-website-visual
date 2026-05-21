@@ -6,10 +6,12 @@ const container = document.querySelector('#pointfield');
 const hero = createPointFieldHero(container, {
   background: '#111111',
   pointColor: '#ffffff',
+  uncoveredPointColor: '#9a9a9a',
+  pointSize: 24,
   field: {
-    columns: 118,
-    rows: 74,
-    spacing: 0.22,
+    columns: 154,
+    rows: 96,
+    spacing: 0.17,
     depthFade: 0.72,
     edgeFade: 0.2
   },
@@ -20,8 +22,7 @@ const hero = createPointFieldHero(container, {
   },
   optics: {
     enabled: true,
-    deviceRadius: 0.16,
-    sectorOpacity: 0.055,
+    deviceRadius: 0.095,
     rangeOpacity: 0.24,
     devices: [
       {
