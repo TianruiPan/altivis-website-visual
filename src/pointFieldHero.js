@@ -16,7 +16,9 @@ const DEFAULT_OPTIONS = {
   animation: {
     enabled: true,
     breathSpeed: 0.3,
-    breathStrength: 0.12
+    breathStrength: 0.12,
+    verticalBreathStrength: 0.045,
+    verticalBreathSpeed: 0.55
   },
   optics: {
     enabled: true,
@@ -58,6 +60,8 @@ const vertexShader = `
   uniform float uMaxPointSize;
   uniform float uBreathStrength;
   uniform float uBreathSpeed;
+  uniform float uVerticalBreathStrength;
+  uniform float uVerticalBreathSpeed;
   uniform int uOpticCount;
   uniform vec3 uOpticRanges[MAX_OPTIC_DEVICES];
   uniform vec4 uOpticScans[MAX_OPTIC_DEVICES];
@@ -112,12 +116,14 @@ const vertexShader = `
     vCoverage = coverage;
     vAlpha = aAlpha;
 
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vec3 animatedPosition = position;
+    animatedPosition.y += sin((uTime * uVerticalBreathSpeed) + (aSeed * 18.84956)) * uVerticalBreathStrength;
+
+    vec4 mvPosition = modelViewMatrix * vec4(animatedPosition, 1.0);
     float breath = 1.0 + sin((uTime * uBreathSpeed) + (aSeed * 6.2831853)) * uBreathStrength;
     float coverageScale = mix(1.18, 1.0, coverage);
-    float scanScale = 1.0 + scanInfluence * 2.85;
-    float radarScale = 1.0 + radarInfluence * 2.2;
-    float computedPointSize = uPointSize * uPixelRatio * breath * coverageScale * scanScale * radarScale * (1.0 / max(0.28, -mvPosition.z));
+    float activeScale = 1.0 + max(scanInfluence, radarInfluence) * 2.85;
+    float computedPointSize = uPointSize * uPixelRatio * breath * coverageScale * activeScale * (1.0 / max(0.28, -mvPosition.z));
     gl_PointSize = min(computedPointSize, uMaxPointSize * uPixelRatio);
     gl_Position = projectionMatrix * mvPosition;
   }
@@ -389,6 +395,8 @@ export function createPointFieldHero(container, userOptions = {}) {
       uUncoveredPointColor: { value: new THREE.Color(options.uncoveredPointColor) },
       uBreathStrength: { value: options.animation.breathStrength },
       uBreathSpeed: { value: options.animation.breathSpeed },
+      uVerticalBreathStrength: { value: options.animation.verticalBreathStrength },
+      uVerticalBreathSpeed: { value: options.animation.verticalBreathSpeed },
       uOpticCount: { value: 0 },
       uOpticRanges: {
         value: Array.from({ length: MAX_OPTIC_DEVICES }, () => new THREE.Vector3())
@@ -421,7 +429,6 @@ export function createPointFieldHero(container, userOptions = {}) {
   const coverageDevices = [...opticDevices, ...radarDevices];
   const opticGroup = new THREE.Group();
   const deviceMeshes = [];
-  let rangeOutline = null;
 
   if (coverageDevices.length > 0) {
     opticDevices.forEach((device) => {
@@ -435,8 +442,6 @@ export function createPointFieldHero(container, userOptions = {}) {
       opticGroup.add(deviceMesh);
     });
 
-    rangeOutline = createUnionRangeOutline(coverageDevices, options.optics);
-    opticGroup.add(rangeOutline);
     scene.add(opticGroup);
   }
 
@@ -580,10 +585,6 @@ export function createPointFieldHero(container, userOptions = {}) {
       mesh.material.map?.dispose();
       mesh.material.dispose();
     });
-    if (rangeOutline) {
-      rangeOutline.geometry.dispose();
-      rangeOutline.material.dispose();
-    }
     renderer.dispose();
     renderer.domElement.remove();
   }

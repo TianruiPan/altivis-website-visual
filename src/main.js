@@ -8,7 +8,7 @@ const hero = createPointFieldHero(container, {
   pointColor: '#ffffff',
   uncoveredPointColor: '#9a9a9a',
   pointSize: 24,
-  maxPointSize: 16,
+  maxPointSize: 30,
   field: {
     columns: 154,
     rows: 96,
@@ -19,7 +19,9 @@ const hero = createPointFieldHero(container, {
   animation: {
     enabled: true,
     breathSpeed: 0.32,
-    breathStrength: 0.15
+    breathStrength: 0.15,
+    verticalBreathStrength: 0.055,
+    verticalBreathSpeed: 0.62
   },
   optics: {
     enabled: true,
