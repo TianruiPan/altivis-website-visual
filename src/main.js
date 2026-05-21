@@ -9,6 +9,7 @@ const hero = createPointFieldHero(container, {
   uncoveredPointColor: '#9a9a9a',
   pointSize: 24,
   maxPointSize: 30,
+  threatPointSize: 6,
   field: {
     columns: 154,
     rows: 96,
@@ -20,7 +21,7 @@ const hero = createPointFieldHero(container, {
     enabled: true,
     breathSpeed: 0.32,
     breathStrength: 0.15,
-    liftStrength: 0.38
+    liftStrength: 0.22
   },
   optics: {
     enabled: true,
@@ -78,10 +79,38 @@ const hero = createPointFieldHero(container, {
       }
     ]
   },
+  keySites: {
+    enabled: true,
+    sites: [
+      {
+        x: 0.45,
+        z: -3.55,
+        size: 4.15
+      }
+    ]
+  },
+  unknownDrones: {
+    enabled: true,
+    color: '#FF2020',
+    size: 0.28,
+    altitude: 0.46,
+    speed: 0.095,
+    trailLength: 22,
+    trailSpacing: 0.017,
+    trailWidth: 0.18,
+    trailOpacity: 0.46,
+    drones: [
+      {
+        start: [1.0, 0.46, 2.0],
+        end: [0.0, 0.46, -8.0],
+        phase: 0.08
+      }
+    ]
+  },
   camera: {
-    fov: 42,
-    position: [6.6, 6.2, 6.6],
-    lookAt: [0, 0, -2.2]
+    fov: 36,
+    position: [5.25, 7.2, 5.25],
+    lookAt: [0.25, 0, -3.25]
   }
 });
 
