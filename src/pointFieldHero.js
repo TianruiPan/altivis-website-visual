@@ -20,9 +20,18 @@ const DEFAULT_OPTIONS = {
   optics: {
     enabled: true,
     deviceColor: '#ffffff',
+    deviceFillColor: '#050505',
     rangeColor: '#ffffff',
     rangeOpacity: 0.22,
     deviceRadius: 0.09,
+    devices: []
+  },
+  radars: {
+    enabled: true,
+    deviceColor: '#ffffff',
+    deviceFillColor: '#050505',
+    deviceSize: 0.18,
+    rippleSpeed: 0.18,
     devices: []
   },
   camera: {
@@ -33,9 +42,11 @@ const DEFAULT_OPTIONS = {
 };
 
 const MAX_OPTIC_DEVICES = 8;
+const MAX_RADAR_DEVICES = 8;
 
 const vertexShader = `
   #define MAX_OPTIC_DEVICES ${MAX_OPTIC_DEVICES}
+  #define MAX_RADAR_DEVICES ${MAX_RADAR_DEVICES}
 
   attribute float aAlpha;
   attribute float aSeed;
@@ -48,6 +59,8 @@ const vertexShader = `
   uniform int uOpticCount;
   uniform vec3 uOpticRanges[MAX_OPTIC_DEVICES];
   uniform vec4 uOpticScans[MAX_OPTIC_DEVICES];
+  uniform int uRadarCount;
+  uniform vec4 uRadarRanges[MAX_RADAR_DEVICES];
 
   varying float vAlpha;
   varying float vCoverage;
@@ -59,6 +72,7 @@ const vertexShader = `
   void main() {
     float coverage = 0.0;
     float scanInfluence = 0.0;
+    float radarInfluence = 0.0;
 
     for (int i = 0; i < MAX_OPTIC_DEVICES; i++) {
       if (i < uOpticCount) {
@@ -77,6 +91,21 @@ const vertexShader = `
       }
     }
 
+    for (int i = 0; i < MAX_RADAR_DEVICES; i++) {
+      if (i < uRadarCount) {
+        vec4 radarRange = uRadarRanges[i];
+        vec2 toPoint = position.xz - radarRange.xy;
+        float distanceToRadar = length(toPoint);
+        float rangeMask = 1.0 - smoothstep(radarRange.z * 0.985, radarRange.z, distanceToRadar);
+        float normalizedDistance = distanceToRadar / max(0.001, radarRange.z);
+        float wavePhase = fract(normalizedDistance * 3.25 - uTime * radarRange.w);
+        float ripple = 1.0 - smoothstep(0.0, 0.09, min(wavePhase, 1.0 - wavePhase));
+        float centerFade = smoothstep(0.05, 0.2, normalizedDistance);
+        radarInfluence = max(radarInfluence, ripple * rangeMask * centerFade);
+        coverage = max(coverage, rangeMask);
+      }
+    }
+
     vCoverage = coverage;
     vAlpha = aAlpha;
 
@@ -84,7 +113,8 @@ const vertexShader = `
     float breath = 1.0 + sin((uTime * uBreathSpeed) + (aSeed * 6.2831853)) * uBreathStrength;
     float coverageScale = mix(1.18, 1.0, coverage);
     float scanScale = 1.0 + scanInfluence * 2.85;
-    gl_PointSize = uPointSize * uPixelRatio * breath * coverageScale * scanScale * (1.0 / max(0.28, -mvPosition.z));
+    float radarScale = 1.0 + radarInfluence * 2.2;
+    gl_PointSize = uPointSize * uPixelRatio * breath * coverageScale * scanScale * radarScale * (1.0 / max(0.28, -mvPosition.z));
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
@@ -121,6 +151,7 @@ function mergeOptions(options = {}) {
     field: { ...DEFAULT_OPTIONS.field, ...options.field },
     animation: { ...DEFAULT_OPTIONS.animation, ...options.animation },
     optics: { ...DEFAULT_OPTIONS.optics, ...options.optics },
+    radars: { ...DEFAULT_OPTIONS.radars, ...options.radars },
     camera: { ...DEFAULT_OPTIONS.camera, ...options.camera }
   };
 }
@@ -187,8 +218,20 @@ function normalizeDevice(device) {
   };
 }
 
+function normalizeRadarDevice(device, fallbackSpeed) {
+  return {
+    x: device.x ?? 0,
+    z: device.z ?? 0,
+    range: device.range ?? 3.4,
+    rippleSpeed: device.rippleSpeed ?? fallbackSpeed
+  };
+}
+
 function createCircleDevice(device, opticsOptions) {
-  const texture = createDeviceCircleTexture(opticsOptions.deviceColor);
+  const texture = createCircleDeviceTexture(
+    opticsOptions.deviceColor,
+    opticsOptions.deviceFillColor
+  );
   const material = new THREE.SpriteMaterial({
     map: texture,
     color: opticsOptions.deviceColor,
@@ -203,17 +246,54 @@ function createCircleDevice(device, opticsOptions) {
   return sprite;
 }
 
-function createDeviceCircleTexture(color) {
+function createRadarDevice(device, radarOptions) {
+  const texture = createSquareDeviceTexture(radarOptions.deviceColor, radarOptions.deviceFillColor);
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    color: radarOptions.deviceColor,
+    transparent: true,
+    opacity: 0.96,
+    depthWrite: false
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(radarOptions.deviceSize, radarOptions.deviceSize, 1);
+  sprite.position.set(device.x, 0.065, device.z);
+  return sprite;
+}
+
+function createCircleDeviceTexture(strokeColor, fillColor) {
   const canvas = document.createElement('canvas');
   canvas.width = 96;
   canvas.height = 96;
 
   const context = canvas.getContext('2d');
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.strokeStyle = color;
+  context.fillStyle = fillColor;
+  context.strokeStyle = strokeColor;
   context.lineWidth = 10;
   context.beginPath();
   context.arc(48, 48, 34, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createSquareDeviceTexture(strokeColor, fillColor) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 96;
+  canvas.height = 96;
+
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = fillColor;
+  context.strokeStyle = strokeColor;
+  context.lineWidth = 10;
+  context.beginPath();
+  context.rect(24, 24, 48, 48);
+  context.fill();
   context.stroke();
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -310,6 +390,10 @@ export function createPointFieldHero(container, userOptions = {}) {
       },
       uOpticScans: {
         value: Array.from({ length: MAX_OPTIC_DEVICES }, () => new THREE.Vector4())
+      },
+      uRadarCount: { value: 0 },
+      uRadarRanges: {
+        value: Array.from({ length: MAX_RADAR_DEVICES }, () => new THREE.Vector4())
       }
     },
     vertexShader,
@@ -324,18 +408,29 @@ export function createPointFieldHero(container, userOptions = {}) {
   const opticDevices = options.optics.enabled
     ? options.optics.devices.slice(0, MAX_OPTIC_DEVICES).map(normalizeDevice)
     : [];
+  const radarDevices = options.radars.enabled
+    ? options.radars.devices
+        .slice(0, MAX_RADAR_DEVICES)
+        .map((device) => normalizeRadarDevice(device, options.radars.rippleSpeed))
+    : [];
+  const coverageDevices = [...opticDevices, ...radarDevices];
   const opticGroup = new THREE.Group();
   const deviceMeshes = [];
   let rangeOutline = null;
 
-  if (opticDevices.length > 0) {
+  if (coverageDevices.length > 0) {
     opticDevices.forEach((device) => {
       const deviceMesh = createCircleDevice(device, options.optics);
       deviceMeshes.push(deviceMesh);
       opticGroup.add(deviceMesh);
     });
+    radarDevices.forEach((device) => {
+      const deviceMesh = createRadarDevice(device, options.radars);
+      deviceMeshes.push(deviceMesh);
+      opticGroup.add(deviceMesh);
+    });
 
-    rangeOutline = createUnionRangeOutline(opticDevices, options.optics);
+    rangeOutline = createUnionRangeOutline(coverageDevices, options.optics);
     opticGroup.add(rangeOutline);
     scene.add(opticGroup);
   }
@@ -357,7 +452,8 @@ export function createPointFieldHero(container, userOptions = {}) {
     setStyleState,
     setDensityState,
     setDeformationState,
-    setOpticDevices
+    setOpticDevices,
+    setRadarDevices
   };
 
   const resizeObserver = new ResizeObserver(() => resize());
@@ -382,6 +478,7 @@ export function createPointFieldHero(container, userOptions = {}) {
     const elapsed = clock.getElapsedTime();
     material.uniforms.uTime.value = options.animation.enabled ? elapsed : 0;
     updateOptics(elapsed);
+    updateRadars();
     renderer.render(scene, camera);
     frameId = requestAnimationFrame(renderLoop);
   }
@@ -423,6 +520,10 @@ export function createPointFieldHero(container, userOptions = {}) {
     // Reserved for runtime device updates when this prototype becomes data-driven.
   }
 
+  function setRadarDevices() {
+    // Reserved for runtime radar updates when this prototype becomes data-driven.
+  }
+
   function updateOptics(elapsed) {
     const opticCount = opticDevices.length;
     material.uniforms.uOpticCount.value = opticCount;
@@ -441,6 +542,23 @@ export function createPointFieldHero(container, userOptions = {}) {
       const angle = device.angle + elapsed * device.rotationSpeed;
       rangeUniform.set(device.x, device.z, device.range);
       scanUniform.set(angle, device.fov, 1, 0);
+    }
+  }
+
+  function updateRadars() {
+    const radarCount = radarDevices.length;
+    material.uniforms.uRadarCount.value = radarCount;
+
+    for (let i = 0; i < MAX_RADAR_DEVICES; i += 1) {
+      const rangeUniform = material.uniforms.uRadarRanges.value[i];
+      const device = radarDevices[i];
+
+      if (!device) {
+        rangeUniform.set(0, 0, 0, 0);
+        continue;
+      }
+
+      rangeUniform.set(device.x, device.z, device.range, device.rippleSpeed);
     }
   }
 

@@ -51,6 +51,31 @@ const hero = createPointFieldHero(container, {
       }
     ]
   },
+  radars: {
+    enabled: true,
+    deviceSize: 0.21,
+    rippleSpeed: 0.22,
+    devices: [
+      {
+        x: -3.1,
+        z: -4.95,
+        range: 3.75,
+        rippleSpeed: 0.19
+      },
+      {
+        x: 1.35,
+        z: -1.65,
+        range: 3.6,
+        rippleSpeed: 0.24
+      },
+      {
+        x: 3.55,
+        z: -5.45,
+        range: 3.9,
+        rippleSpeed: 0.16
+      }
+    ]
+  },
   camera: {
     fov: 42,
     position: [6.6, 6.2, 6.6],

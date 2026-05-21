@@ -27,11 +27,13 @@ http://127.0.0.1:5173/
 - Perspective camera looking across a flat field
 - No height/terrain deformation in this first version
 - Subtle breathing through point size only
-- Three abstract optical devices represented by smaller white outline circles
+- Three abstract optical devices represented by smaller black-filled white outline circles
+- Three abstract radar devices represented by black-filled white outline squares
 - FOV sector fill is hidden, but sector-driven point scaling remains active
+- Radar coverage emits outward ripple bands that also scale point size
 - Dots outside the combined coverage area render as small grey X marks
 - Dots inside the combined coverage area remain white dots
-- Device ranges are drawn as a pale boolean-union outline, so overlapping circles merge visually
+- Optical and radar ranges are drawn as one pale boolean-union outline, so overlaps merge visually
 
 ## Extension Hooks
 
