@@ -76,7 +76,7 @@ const vertexShader = `
   void main() {
     float coverage = 0.0;
     float scanInfluence = 0.0;
-    float radarInfluence = 0.0;
+    float radarLift = 0.0;
 
     for (int i = 0; i < MAX_OPTIC_DEVICES; i++) {
       if (i < uOpticCount) {
@@ -102,11 +102,10 @@ const vertexShader = `
         float distanceToRadar = length(toPoint);
         float rangeMask = step(distanceToRadar, radarRange.z);
         float normalizedDistance = distanceToRadar / max(0.001, radarRange.z);
-        float wavePhase = fract(normalizedDistance * 3.25 - uTime * radarRange.w);
-        float ripple = 1.0 - smoothstep(0.0, 0.09, min(wavePhase, 1.0 - wavePhase));
         float centerFade = smoothstep(0.05, 0.2, normalizedDistance);
         float edgeFade = 1.0 - smoothstep(0.54, 1.0, normalizedDistance);
-        radarInfluence = max(radarInfluence, ripple * rangeMask * centerFade * edgeFade);
+        float wave = sin((normalizedDistance * 4.75 - uTime * radarRange.w) * 6.2831853);
+        radarLift += wave * rangeMask * centerFade * edgeFade;
         coverage = max(coverage, rangeMask);
       }
     }
@@ -115,13 +114,13 @@ const vertexShader = `
     vAlpha = aAlpha;
 
     vec3 animatedPosition = position;
-    float activeInfluence = max(scanInfluence, radarInfluence);
-    animatedPosition.y += activeInfluence * uLiftStrength;
+    animatedPosition.y += clamp(radarLift, -1.0, 1.0) * uLiftStrength;
 
     vec4 mvPosition = modelViewMatrix * vec4(animatedPosition, 1.0);
     float breath = 1.0 + sin((uTime * uBreathSpeed) + (aSeed * 6.2831853)) * uBreathStrength;
     float coverageScale = mix(1.18, 1.0, coverage);
-    float computedPointSize = uPointSize * uPixelRatio * breath * coverageScale * (1.0 / max(0.28, -mvPosition.z));
+    float opticalScanScale = 1.0 + scanInfluence * 0.42;
+    float computedPointSize = uPointSize * uPixelRatio * breath * coverageScale * opticalScanScale * (1.0 / max(0.28, -mvPosition.z));
     gl_PointSize = min(computedPointSize, uMaxPointSize * uPixelRatio);
     gl_Position = projectionMatrix * mvPosition;
   }

@@ -20,7 +20,7 @@ const hero = createPointFieldHero(container, {
     enabled: true,
     breathSpeed: 0.32,
     breathStrength: 0.15,
-    liftStrength: 0.5
+    liftStrength: 0.38
   },
   optics: {
     enabled: true,
