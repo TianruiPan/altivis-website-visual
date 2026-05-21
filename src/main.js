@@ -8,6 +8,7 @@ const hero = createPointFieldHero(container, {
   pointColor: '#ffffff',
   uncoveredPointColor: '#9a9a9a',
   pointSize: 24,
+  maxPointSize: 16,
   field: {
     columns: 154,
     rows: 96,
@@ -54,25 +55,25 @@ const hero = createPointFieldHero(container, {
   radars: {
     enabled: true,
     deviceSize: 0.21,
-    rippleSpeed: 0.22,
+    rippleSpeed: 0.52,
     devices: [
       {
         x: -3.1,
         z: -4.95,
         range: 3.75,
-        rippleSpeed: 0.19
+        rippleSpeed: 0.48
       },
       {
         x: 1.35,
         z: -1.65,
         range: 3.6,
-        rippleSpeed: 0.24
+        rippleSpeed: 0.62
       },
       {
         x: 3.55,
         z: -5.45,
         range: 3.9,
-        rippleSpeed: 0.16
+        rippleSpeed: 0.42
       }
     ]
   },

@@ -5,6 +5,7 @@ const DEFAULT_OPTIONS = {
   pointColor: '#ffffff',
   uncoveredPointColor: '#9a9a9a',
   pointSize: 20,
+  maxPointSize: 34,
   field: {
     columns: 96,
     rows: 64,
@@ -54,6 +55,7 @@ const vertexShader = `
   uniform float uTime;
   uniform float uPixelRatio;
   uniform float uPointSize;
+  uniform float uMaxPointSize;
   uniform float uBreathStrength;
   uniform float uBreathSpeed;
   uniform int uOpticCount;
@@ -80,12 +82,12 @@ const vertexShader = `
         vec4 opticScan = uOpticScans[i];
         vec2 toPoint = position.xz - opticRange.xy;
         float distanceToOptic = length(toPoint);
-        float rangeMask = 1.0 - smoothstep(opticRange.z * 0.98, opticRange.z, distanceToOptic);
+        float rangeMask = step(distanceToOptic, opticRange.z);
         float nearMask = 1.0 - smoothstep(opticRange.z * 0.58, opticRange.z, distanceToOptic);
         float pointAngle = atan(toPoint.y, toPoint.x);
         float angleDelta = abs(signedAngleDistance(pointAngle, opticScan.x));
         float fovHalf = opticScan.y * 0.5;
-        float fovMask = 1.0 - smoothstep(fovHalf * 0.88, fovHalf, angleDelta);
+        float fovMask = step(angleDelta, fovHalf);
         coverage = max(coverage, rangeMask);
         scanInfluence = max(scanInfluence, nearMask * fovMask);
       }
@@ -96,12 +98,13 @@ const vertexShader = `
         vec4 radarRange = uRadarRanges[i];
         vec2 toPoint = position.xz - radarRange.xy;
         float distanceToRadar = length(toPoint);
-        float rangeMask = 1.0 - smoothstep(radarRange.z * 0.985, radarRange.z, distanceToRadar);
+        float rangeMask = step(distanceToRadar, radarRange.z);
         float normalizedDistance = distanceToRadar / max(0.001, radarRange.z);
         float wavePhase = fract(normalizedDistance * 3.25 - uTime * radarRange.w);
         float ripple = 1.0 - smoothstep(0.0, 0.09, min(wavePhase, 1.0 - wavePhase));
         float centerFade = smoothstep(0.05, 0.2, normalizedDistance);
-        radarInfluence = max(radarInfluence, ripple * rangeMask * centerFade);
+        float edgeFade = 1.0 - smoothstep(0.54, 1.0, normalizedDistance);
+        radarInfluence = max(radarInfluence, ripple * rangeMask * centerFade * edgeFade);
         coverage = max(coverage, rangeMask);
       }
     }
@@ -114,7 +117,8 @@ const vertexShader = `
     float coverageScale = mix(1.18, 1.0, coverage);
     float scanScale = 1.0 + scanInfluence * 2.85;
     float radarScale = 1.0 + radarInfluence * 2.2;
-    gl_PointSize = uPointSize * uPixelRatio * breath * coverageScale * scanScale * radarScale * (1.0 / max(0.28, -mvPosition.z));
+    float computedPointSize = uPointSize * uPixelRatio * breath * coverageScale * scanScale * radarScale * (1.0 / max(0.28, -mvPosition.z));
+    gl_PointSize = min(computedPointSize, uMaxPointSize * uPixelRatio);
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
@@ -129,15 +133,15 @@ const fragmentShader = `
   void main() {
     vec2 centered = gl_PointCoord - vec2(0.5);
     float dist = length(centered);
-    float disc = smoothstep(0.5, 0.16, dist);
+    float disc = step(dist, 0.42);
 
     float diagonalA = abs(centered.x - centered.y);
     float diagonalB = abs(centered.x + centered.y);
-    float stroke = 1.0 - smoothstep(0.045, 0.14, min(diagonalA, diagonalB));
-    float extent = 1.0 - smoothstep(0.38, 0.52, max(abs(centered.x), abs(centered.y)));
+    float stroke = step(min(diagonalA, diagonalB), 0.075);
+    float extent = step(max(abs(centered.x), abs(centered.y)), 0.47);
     float xShape = stroke * extent;
 
-    float covered = smoothstep(0.45, 0.55, vCoverage);
+    float covered = step(0.5, vCoverage);
     vec3 color = mix(uUncoveredPointColor, uPointColor, covered);
     float shapeAlpha = mix(xShape * 0.95, disc, covered);
     gl_FragColor = vec4(color, shapeAlpha * vAlpha);
@@ -380,6 +384,7 @@ export function createPointFieldHero(container, userOptions = {}) {
       uTime: { value: 0 },
       uPixelRatio: { value: renderer.getPixelRatio() },
       uPointSize: { value: options.pointSize },
+      uMaxPointSize: { value: options.maxPointSize },
       uPointColor: { value: new THREE.Color(options.pointColor) },
       uUncoveredPointColor: { value: new THREE.Color(options.uncoveredPointColor) },
       uBreathStrength: { value: options.animation.breathStrength },
@@ -505,6 +510,9 @@ export function createPointFieldHero(container, userOptions = {}) {
     }
     if (typeof nextStyle.pointSize === 'number') {
       material.uniforms.uPointSize.value = nextStyle.pointSize;
+    }
+    if (typeof nextStyle.maxPointSize === 'number') {
+      material.uniforms.uMaxPointSize.value = nextStyle.maxPointSize;
     }
   }
 
