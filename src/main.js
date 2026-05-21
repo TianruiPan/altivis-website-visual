@@ -53,8 +53,8 @@ const hero = createPointFieldHero(container, {
   },
   camera: {
     fov: 42,
-    position: [0, 6.2, 8.6],
-    lookAt: [0, 0, -1.5]
+    position: [6.6, 6.2, 6.6],
+    lookAt: [0, 0, -2.2]
   }
 });
 

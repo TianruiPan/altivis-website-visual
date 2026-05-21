@@ -28,7 +28,7 @@ http://127.0.0.1:5173/
 - No height/terrain deformation in this first version
 - Subtle breathing through point size only
 - Three abstract optical devices represented by smaller white outline circles
-- No visible FOV sector in the current stage
+- FOV sector fill is hidden, but sector-driven point scaling remains active
 - Dots outside the combined coverage area render as small grey X marks
 - Dots inside the combined coverage area remain white dots
 - Device ranges are drawn as a pale boolean-union outline, so overlapping circles merge visually

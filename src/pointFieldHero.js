@@ -47,20 +47,33 @@ const vertexShader = `
   uniform float uBreathSpeed;
   uniform int uOpticCount;
   uniform vec3 uOpticRanges[MAX_OPTIC_DEVICES];
+  uniform vec4 uOpticScans[MAX_OPTIC_DEVICES];
 
   varying float vAlpha;
   varying float vCoverage;
 
+  float signedAngleDistance(float a, float b) {
+    return atan(sin(a - b), cos(a - b));
+  }
+
   void main() {
     float coverage = 0.0;
+    float scanInfluence = 0.0;
 
     for (int i = 0; i < MAX_OPTIC_DEVICES; i++) {
       if (i < uOpticCount) {
         vec3 opticRange = uOpticRanges[i];
+        vec4 opticScan = uOpticScans[i];
         vec2 toPoint = position.xz - opticRange.xy;
         float distanceToOptic = length(toPoint);
         float rangeMask = 1.0 - smoothstep(opticRange.z * 0.98, opticRange.z, distanceToOptic);
+        float nearMask = 1.0 - smoothstep(opticRange.z * 0.58, opticRange.z, distanceToOptic);
+        float pointAngle = atan(toPoint.y, toPoint.x);
+        float angleDelta = abs(signedAngleDistance(pointAngle, opticScan.x));
+        float fovHalf = opticScan.y * 0.5;
+        float fovMask = 1.0 - smoothstep(fovHalf * 0.88, fovHalf, angleDelta);
         coverage = max(coverage, rangeMask);
+        scanInfluence = max(scanInfluence, nearMask * fovMask);
       }
     }
 
@@ -69,8 +82,9 @@ const vertexShader = `
 
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     float breath = 1.0 + sin((uTime * uBreathSpeed) + (aSeed * 6.2831853)) * uBreathStrength;
-    float coverageScale = mix(0.76, 1.0, coverage);
-    gl_PointSize = uPointSize * uPixelRatio * breath * coverageScale * (1.0 / max(0.28, -mvPosition.z));
+    float coverageScale = mix(1.18, 1.0, coverage);
+    float scanScale = 1.0 + scanInfluence * 2.85;
+    gl_PointSize = uPointSize * uPixelRatio * breath * coverageScale * scanScale * (1.0 / max(0.28, -mvPosition.z));
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
@@ -89,8 +103,8 @@ const fragmentShader = `
 
     float diagonalA = abs(centered.x - centered.y);
     float diagonalB = abs(centered.x + centered.y);
-    float stroke = 1.0 - smoothstep(0.035, 0.12, min(diagonalA, diagonalB));
-    float extent = 1.0 - smoothstep(0.34, 0.5, max(abs(centered.x), abs(centered.y)));
+    float stroke = 1.0 - smoothstep(0.045, 0.14, min(diagonalA, diagonalB));
+    float extent = 1.0 - smoothstep(0.38, 0.52, max(abs(centered.x), abs(centered.y)));
     float xShape = stroke * extent;
 
     float covered = smoothstep(0.45, 0.55, vCoverage);
@@ -293,6 +307,9 @@ export function createPointFieldHero(container, userOptions = {}) {
       uOpticCount: { value: 0 },
       uOpticRanges: {
         value: Array.from({ length: MAX_OPTIC_DEVICES }, () => new THREE.Vector3())
+      },
+      uOpticScans: {
+        value: Array.from({ length: MAX_OPTIC_DEVICES }, () => new THREE.Vector4())
       }
     },
     vertexShader,
@@ -406,20 +423,24 @@ export function createPointFieldHero(container, userOptions = {}) {
     // Reserved for runtime device updates when this prototype becomes data-driven.
   }
 
-  function updateOptics() {
+  function updateOptics(elapsed) {
     const opticCount = opticDevices.length;
     material.uniforms.uOpticCount.value = opticCount;
 
     for (let i = 0; i < MAX_OPTIC_DEVICES; i += 1) {
       const rangeUniform = material.uniforms.uOpticRanges.value[i];
+      const scanUniform = material.uniforms.uOpticScans.value[i];
       const device = opticDevices[i];
 
       if (!device) {
         rangeUniform.set(0, 0, 0);
+        scanUniform.set(0, 0, 0, 0);
         continue;
       }
 
+      const angle = device.angle + elapsed * device.rotationSpeed;
       rangeUniform.set(device.x, device.z, device.range);
+      scanUniform.set(angle, device.fov, 1, 0);
     }
   }
 
