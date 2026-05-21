@@ -17,8 +17,7 @@ const DEFAULT_OPTIONS = {
     enabled: true,
     breathSpeed: 0.3,
     breathStrength: 0.12,
-    verticalBreathStrength: 0.045,
-    verticalBreathSpeed: 0.55
+    liftStrength: 0.46
   },
   optics: {
     enabled: true,
@@ -60,8 +59,7 @@ const vertexShader = `
   uniform float uMaxPointSize;
   uniform float uBreathStrength;
   uniform float uBreathSpeed;
-  uniform float uVerticalBreathStrength;
-  uniform float uVerticalBreathSpeed;
+  uniform float uLiftStrength;
   uniform int uOpticCount;
   uniform vec3 uOpticRanges[MAX_OPTIC_DEVICES];
   uniform vec4 uOpticScans[MAX_OPTIC_DEVICES];
@@ -117,13 +115,13 @@ const vertexShader = `
     vAlpha = aAlpha;
 
     vec3 animatedPosition = position;
-    animatedPosition.y += sin((uTime * uVerticalBreathSpeed) + (aSeed * 18.84956)) * uVerticalBreathStrength;
+    float activeInfluence = max(scanInfluence, radarInfluence);
+    animatedPosition.y += activeInfluence * uLiftStrength;
 
     vec4 mvPosition = modelViewMatrix * vec4(animatedPosition, 1.0);
     float breath = 1.0 + sin((uTime * uBreathSpeed) + (aSeed * 6.2831853)) * uBreathStrength;
     float coverageScale = mix(1.18, 1.0, coverage);
-    float activeScale = 1.0 + max(scanInfluence, radarInfluence) * 2.85;
-    float computedPointSize = uPointSize * uPixelRatio * breath * coverageScale * activeScale * (1.0 / max(0.28, -mvPosition.z));
+    float computedPointSize = uPointSize * uPixelRatio * breath * coverageScale * (1.0 / max(0.28, -mvPosition.z));
     gl_PointSize = min(computedPointSize, uMaxPointSize * uPixelRatio);
     gl_Position = projectionMatrix * mvPosition;
   }
@@ -395,8 +393,7 @@ export function createPointFieldHero(container, userOptions = {}) {
       uUncoveredPointColor: { value: new THREE.Color(options.uncoveredPointColor) },
       uBreathStrength: { value: options.animation.breathStrength },
       uBreathSpeed: { value: options.animation.breathSpeed },
-      uVerticalBreathStrength: { value: options.animation.verticalBreathStrength },
-      uVerticalBreathSpeed: { value: options.animation.verticalBreathSpeed },
+      uLiftStrength: { value: options.animation.liftStrength },
       uOpticCount: { value: 0 },
       uOpticRanges: {
         value: Array.from({ length: MAX_OPTIC_DEVICES }, () => new THREE.Vector3())

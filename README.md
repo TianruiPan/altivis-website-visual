@@ -26,8 +26,9 @@ http://127.0.0.1:5173/
 - Denser grid than the initial stage
 - Perspective camera looking across a flat field
 - No height/terrain deformation in this first version
-- Subtle breathing through point size and random vertical point motion
-- Radar and optical effects share the same max point size, so overlaps do not stack larger than the optical scan size
+- Subtle breathing through point size only
+- Radar and optical activity now lifts points upward instead of increasing point size
+- Radar and optical lift share the same influence ceiling, so overlaps do not stack larger than the optical scan response
 - Point and X glyph edges are hard-edged instead of softly feathered
 - Three abstract optical devices represented by smaller black-filled white outline circles
 - Three abstract radar devices represented by black-filled white outline squares
