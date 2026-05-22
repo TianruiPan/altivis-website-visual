@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const DEFAULT_OPTIONS = {
   background: '#111111',
@@ -58,7 +59,14 @@ const DEFAULT_OPTIONS = {
   camera: {
     fov: 42,
     position: [0, 6, 8],
-    lookAt: [0, 0, -1]
+    lookAt: [0, 0, -1],
+    controls: {
+      enabled: true,
+      minDistance: 3.2,
+      maxDistance: 16,
+      minPolarAngle: 0.28,
+      maxPolarAngle: 1.36
+    }
   }
 };
 
@@ -216,7 +224,14 @@ function mergeOptions(options = {}) {
     radars: { ...DEFAULT_OPTIONS.radars, ...options.radars },
     keySites: { ...DEFAULT_OPTIONS.keySites, ...options.keySites },
     unknownDrones: { ...DEFAULT_OPTIONS.unknownDrones, ...options.unknownDrones },
-    camera: { ...DEFAULT_OPTIONS.camera, ...options.camera }
+    camera: {
+      ...DEFAULT_OPTIONS.camera,
+      ...options.camera,
+      controls: {
+        ...DEFAULT_OPTIONS.camera.controls,
+        ...options.camera?.controls
+      }
+    }
   };
 }
 
@@ -692,7 +707,8 @@ export function createPointFieldHero(container, userOptions = {}) {
 
   const camera = new THREE.PerspectiveCamera(options.camera.fov, 1, 0.1, 100);
   camera.position.fromArray(options.camera.position);
-  camera.lookAt(new THREE.Vector3().fromArray(options.camera.lookAt));
+  const cameraTarget = new THREE.Vector3().fromArray(options.camera.lookAt);
+  camera.lookAt(cameraTarget);
 
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -702,6 +718,26 @@ export function createPointFieldHero(container, userOptions = {}) {
   renderer.setClearColor(options.background, 1);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   container.appendChild(renderer.domElement);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enabled = options.camera.controls.enabled;
+  controls.target.copy(cameraTarget);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.rotateSpeed = 0.55;
+  controls.zoomSpeed = 0.75;
+  controls.panSpeed = 0.7;
+  controls.screenSpacePanning = true;
+  controls.minDistance = options.camera.controls.minDistance;
+  controls.maxDistance = options.camera.controls.maxDistance;
+  controls.minPolarAngle = options.camera.controls.minPolarAngle;
+  controls.maxPolarAngle = options.camera.controls.maxPolarAngle;
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: THREE.MOUSE.PAN
+  };
+  controls.update();
 
   const material = new THREE.ShaderMaterial({
     transparent: true,
@@ -809,6 +845,7 @@ export function createPointFieldHero(container, userOptions = {}) {
   const api = {
     scene,
     camera,
+    controls,
     renderer,
     points,
     start,
@@ -848,6 +885,7 @@ export function createPointFieldHero(container, userOptions = {}) {
     updateDetections(elapsed);
     updateOptics(elapsed);
     updateRadars();
+    controls.update();
     renderer.render(scene, camera);
     frameId = requestAnimationFrame(renderLoop);
   }
@@ -1063,6 +1101,7 @@ export function createPointFieldHero(container, userOptions = {}) {
     });
     unknownDroneVisuals.forEach((visual) => visual.dispose());
     connectionLine.dispose();
+    controls.dispose();
     renderer.dispose();
     renderer.domElement.remove();
   }

@@ -31,7 +31,7 @@ const hero = createPointFieldHero(container, {
       {
         x: -2.35,
         z: -2.75,
-        range: 2.75,
+        range: 3.75,
         fovDegrees: 56,
         initialAngleDegrees: -18,
         rotationSpeedDegrees: 3.2
@@ -39,7 +39,7 @@ const hero = createPointFieldHero(container, {
       {
         x: 0.15,
         z: -4.05,
-        range: 3.2,
+        range: 3.6,
         fovDegrees: 48,
         initialAngleDegrees: 78,
         rotationSpeedDegrees: -2.1
@@ -47,7 +47,7 @@ const hero = createPointFieldHero(container, {
       {
         x: 2.55,
         z: -2.65,
-        range: 2.65,
+        range: 3.9,
         fovDegrees: 62,
         initialAngleDegrees: 156,
         rotationSpeedDegrees: 2.65
@@ -101,15 +101,15 @@ const hero = createPointFieldHero(container, {
     trailOpacity: 0.46,
     drones: [
       {
-        start: [1.0, 0.46, 2.0],
-        end: [0.0, 0.46, -8.0],
+        start: [-5.1, 0.46, -3.8],
+        end: [5.1, 0.46, -3.1],
         phase: 0.08
       }
     ]
   },
   camera: {
     fov: 36,
-    position: [5.25, 7.2, 5.25],
+    position: [0.25, 10.2, 5.1],
     lookAt: [0.25, 0, -3.25]
   }
 });
